@@ -1,0 +1,801 @@
+---
+title: "DSC510 Final Project Sandbox"
+output: html_notebook
+---
+
+# **DSC510 Final Project Sandbox**
+
+```{r}
+#Setup working directory
+setwd("C:/Users/jjbocek/Documents/DePaul/DSC510/Final Project")
+```
+
+```{r}
+# Libraries
+library(readr)
+library(tidyverse)
+library(psych) #pairs.panels (improved scatter plot)
+```
+
+```{r}
+#Read in the data
+# library(readr)
+dataset0 <- read_csv("hcvdat0.csv", col_names = TRUE)
+```
+
+##Data Dictionary
+1 - Patient ID
+2 - Category
+3 - Age
+4 - Sex
+5 - *ALB *Albumin blood test. A protein made by your liver. Low levels can be sign of liver or kidney disease.High levels sign of dehydration. 3.5-5 grams per deciliter (g/dL)*
+6 - ALP *Alkaline phosphatase blood test. Enzyme found in parts of the body. Each part of body produces a different type of ALP, most is found in liver, bones, kidneys, and diestive system. Does not identify source of ALP in the blood. 40-129 U/L*
+7 - ALT *Alanine transaminase blood test. It is an enzyme found mostly in the liver. When cells are damaged, they release ALT into the bloodstream. High levels may be sign of liver injury or disease. 7-55 units per liter (U/L)*
+8 - AST *Aspartate aminotransferase blood test. Is an enzyme found mostly in the liver but also in muscles and other organs in the body. When cells that contain AST are damaged, they relase AST into the blood. Test commonly used to help diagnose liver damage or disease. Typical results are 7 to 55 units per liter (U/L)* 
+9 - *BIL * Measures the bilirubin in your blood. A yellowish pigment that is made during the breakdown of red blood cells. Higher levels may indicate different types of liver or bile duct problems or caused by increased rate of destruction of red blood cells 0.1 -1.2 milligrams per deciliter (mg/dL)*
+10 - *CHE *Creatine blood test. Typically done to see how well your kidneys are working. Ttpical results are  0.7 to 1.3 mg/dL (61.9 to 114.9 µmol/L) for men and 0.6 to 1.1 mg/dL (53 to 97.2 µmol/L) for women.*
+11 - CHOL *Ratio between total cholesterol and HDL (high-density lipoprotein). In general, want your number to be below 5*
+12 - CREA *Creatinine blood test. Waste product made by muscles. Normally your kidneys filter it from your blood. If problem with kidneys creatinine can build up in the blood. A normal result is 0.7 to 1.3 mg/dL (61.9 to 114.9 µmol/L) for men and 0.6 to 1.1 mg/dL (53 to 97.2 µmol/L) for women* 
+13 - GGT *Gamma-glutamyl Transferase test measures the amount of GGT in the blood, its an enzyme found througout the body and liver, high levels may be a sign of liver disease. One common reference range for adults is 5 to 40 U/L (units per liter), or 8-61 U/L* 
+
+https://medlineplus.gov/lab-tests/ast-test/
+https://www.ucsfhealth.org/medical-tests/creatinine-blood-test
+
+## Data Cleaning
+```{r}
+#remove primary key
+ds <- dataset0[-c(1)]
+```
+
+#### Missing Data
+```{r}
+#Check Missing Data
+sum(is.na(ds))
+#Number of rows with missing values
+nrow(ds[!complete.cases(ds), ])
+```
+```{r}
+#Check index #'s for missing values by each column
+for (x in (colnames(ds))){
+  y <- ds %>%
+  rowid_to_column() %>%
+  filter(is.na(ds[x]))
+  print(y)
+}
+```
+*Most of the missing values are from ALP and CHOL. Replace these NA's with median of feature. Remove instances of other missing rows if there are still NA's in the data set*
+
+
+```{r}
+#Look at NA's and Sumary Statistics for each feature 
+summary(ds)
+```
+```{r}
+#Replace NA's with median ALP value
+ds$ALP <- ds$ALP %>% replace_na(66.2)
+#Replace NA's with median CHOL value
+ds$CHOL <- ds$CHOL %>% replace_na(5.3)
+#Listwise deletion of rows for columns with missing values 
+ds <- ds[complete.cases(ds), ]
+#check worked
+summary(ds)
+sum(is.na(ds))
+```
+
+#### Feature types
+```{r}
+#Change features from characters to categorical factors
+ds$Category <- as.factor(ds$Category)
+ds$Sex <- as.factor(ds$Sex)
+```
+```{r}
+summary(ds)
+```
+```{r}
+#Convert factor strings into factor with values
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category == '1=Hepatitis'] <- 1
+ds$Category[ds$Category == '2=Fibrosis'] <- 2
+ds$Category[ds$Category == '3=Cirrhosis'] <- 3
+ds$Category <- as.factor(ds$Category)
+```
+
+#### Outliers
+```{r}
+#Remove outliers
+# filter(ds,CREA > 200)
+ds <- ds %>% filter(ds$CREA < 200)
+# -----Need to make decisions on potential outliers-----
+#filter(ds,GGT > 100)
+```
+
+## Data Exploration
+```{r}
+pairs.panels(ds)
+```
+
+```{r}
+library(ggplot2)
+library(reshape2)
+ggplot(melt(ds),aes(x=value)) + geom_histogram(binwidth = 10) + facet_wrap(~variable) 
+
+```
+
+#### Check for Normality
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$Age)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$ALB)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$ALP)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$ALT)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$AST)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$BIL)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$CHE)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$CHOL)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$CREA)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$GGT)~Category,data=ds)  #check by groups for normality
+```
+```{r}
+#Check Normality
+#P-value<0.05 is not normal
+library(RVAideMemoire)
+byf.shapiro(as.matrix(ds$PROT)~Category,data=ds)  #check by groups for normality
+```
+
+```{r}
+#Cleaned Dataset placeholder
+ds1 <- ds
+```
+
+
+## Variable Means Table
+##### *HCV prediction*
+###### Dependent Variable selection
+```{r}
+ds <- ds1
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category != 0] <- 1
+ds$Category <- as.factor(ds$Category)
+```
+
+###### Making Variable Mean table
+```{r}
+ds2<- ds %>% filter(ds$Category == 0)
+HCV_sum <- data.frame(summary(ds2))
+HCV_means1 <- HCV_sum %>% filter(grepl('Mean\\.*',HCV_sum$Freq ))
+HCV_means1$Freq <- substr(HCV_means1$Freq, 9,14)
+HCV_means1$Freq <- as.numeric(HCV_means1$Freq)
+HCV_means1$Freq <- round(HCV_means1$Freq, digits = 1)
+
+HVC_means <- data.frame(HCV_means1$Var2)
+names(HVC_means)[1] <- 'Variables'
+HVC_means$no_HVC <- HCV_means1$Freq
+
+```
+##### *Hepatitis prediction*
+###### Variable selection
+```{r}
+#Reset the dataset
+ds <- ds1
+
+
+ds$Category <- as.character(ds$Category)
+#Only predicting Hepatitis
+ds <- ds %>% filter(ds$Category < 2)
+ds$Category <- as.factor(ds$Category)
+```
+
+###### Making Variable Mean table
+```{r}
+ds2<- ds %>% filter(ds$Category == 1)
+HCV_sum <- data.frame(summary(ds2))
+HCV_means1 <- HCV_sum %>% filter(grepl('Mean\\.*',HCV_sum$Freq ))
+HCV_means1$Freq <- substr(HCV_means1$Freq, 9,14)
+HCV_means1$Freq <- as.numeric(HCV_means1$Freq)
+HCV_means1$Freq <- round(HCV_means1$Freq, digits = 1)
+
+HVC_means$Hepatitis <- HCV_means1$Freq
+```
+##### **Fibrosis prediction** 
+###### Variable selection
+```{r}
+#Reset the dataset
+ds <- ds1
+
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category == '1=Hepatitis'] <- 1
+ds$Category[ds$Category == '2=Fibrosis'] <- 2
+ds$Category[ds$Category == '3=Cirrhosis'] <- 3
+
+#Only predicting Hepatitis
+ds <- ds %>% filter(ds$Category < 3, ds$Category != 1)
+ds$Category <- as.factor(ds$Category)
+```
+
+###### Making Variable Mean table
+```{r}
+ds2<- ds %>% filter(ds$Category == 2)
+HCV_sum <- data.frame(summary(ds2))
+HCV_means1 <- HCV_sum %>% filter(grepl('Mean\\.*',HCV_sum$Freq ))
+HCV_means1$Freq <- substr(HCV_means1$Freq, 9,14)
+HCV_means1$Freq <- as.numeric(HCV_means1$Freq)
+HCV_means1$Freq <- round(HCV_means1$Freq, digits = 1)
+
+HVC_means$Fibrosis <- HCV_means1$Freq
+```
+##### **Cirrhosis prediction**
+###### Variable selection
+```{r}
+#Reset the dataset
+ds <- ds1
+
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category == '1=Hepatitis'] <- 1
+ds$Category[ds$Category == '2=Fibrosis'] <- 2
+ds$Category[ds$Category == '3=Cirrhosis'] <- 3
+
+#Only predicting Hepatitis
+ds <- ds %>% filter(ds$Category != 2, ds$Category != 1)
+ds$Category <- as.factor(ds$Category)
+```
+
+###### Making Variable Mean table
+```{r}
+ds2<- ds %>% filter(ds$Category == 3)
+HCV_sum <- data.frame(summary(ds2))
+HCV_means1 <- HCV_sum %>% filter(grepl('Mean\\.*',HCV_sum$Freq ))
+HCV_means1$Freq <- substr(HCV_means1$Freq, 9,14)
+HCV_means1$Freq <- as.numeric(HCV_means1$Freq)
+HCV_means1$Freq <- round(HCV_means1$Freq, digits = 1)
+
+HVC_means$Cirrhosis <- HCV_means1$Freq
+```
+
+###### Graphs
+```{r}
+library(ggplot2)
+library(reshape2)
+table1 <- melt(HVC_means, id.vars= 'Variables', variable.name = 'Condition', value.name= 'Means')
+#Variable importance comparison
+ggplot(table1, aes(x= Condition , y = Means, group = Variables, color =Variables)) +
+  geom_line(size = 1) +
+  ggtitle("Plot of blood test scores as condition of HVC worsens") +
+  scale_color_brewer(palette='Paired')
+
+```
+
+## Means significant tests
+```{r}
+kruskal.test(Age ~ Category, ds)
+pairwise.wilcox.test(ds$Age, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(ALB ~ Category, ds)
+pairwise.wilcox.test(ds$ALB, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(ALP ~ Category, ds)
+pairwise.wilcox.test(ds$ALP, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(ALT ~ Category, ds)
+pairwise.wilcox.test(ds$ALT, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(AST ~ Category, ds)
+pairwise.wilcox.test(ds$AST, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(BIL ~ Category, ds)
+pairwise.wilcox.test(ds$BIL, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(CHE ~ Category, ds)
+pairwise.wilcox.test(ds$CHE, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(CHOL ~ Category, ds)
+pairwise.wilcox.test(ds$CHOL, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(CREA ~ Category, ds)
+pairwise.wilcox.test(ds$CREA, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(GGT ~ Category, ds)
+pairwise.wilcox.test(ds$GGT, ds$Category, p.adjust.method = 'BH')
+
+```
+```{r}
+kruskal.test(PROT ~ Category, ds)
+pairwise.wilcox.test(ds$PROT, ds$Category, p.adjust.method = 'BH')
+
+```
+
+## Normalization
+```{r}
+ds <- ds %>% mutate(Age = scale(Age, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(ALB = scale(ALB, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(ALP = scale(ALP, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(ALT = scale(ALT, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(AST = scale(AST, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(BIL = scale(BIL, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(CHE = scale(CHE, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(CHOL = scale(CHOL, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(CREA = scale(CREA, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(GGT = scale(GGT, center=TRUE, scale=TRUE))
+ds <- ds %>% mutate(PROT = scale(PROT, center=TRUE, scale=TRUE))
+summary(ds)
+```
+
+## HCV prediction
+#### Dependent Variable selection
+```{r}
+ds <- ds1
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category != 0] <- 1
+ds$Category <- as.factor(ds$Category)
+```
+
+
+#### Training and Test sets
+```{r}
+set.seed(123)
+library(caret)
+#Define repeated cross validation
+repeat_cv <- trainControl(method= 'repeatedcv', number = 10, repeats = 4)
+# create train and test sets of dataset
+# createDataPartition creates a stratified random sample
+trainIndex = createDataPartition(ds1$Category, p = 0.70, list = FALSE)
+ds_train = ds1[trainIndex,]
+ds_test = ds1[-trainIndex,]
+```
+
+##### Random Forest with Cross Validation
+```{r}
+set.seed(123)
+#Fit the random forest model using cross validation
+rf <- train(Category ~., data = ds_train, method = 'rf',trControl = repeat_cv, metric = 'Accuracy')
+rf
+```
+```{r}
+#get confusion matrix and OOB error rate of model
+rf$finalModel
+```
+
+```{r}
+#Get variable importance
+var_importance <- varImp(rf, scale = FALSE)$importance
+#Turn into dataframe
+var_importance <- data.frame(variables = row.names(var_importance), importance = var_importance$Overall)
+var_importance_table <- var_importance
+names(var_importance_table)[2] <- 'HVC'
+#Create plot
+var_importance %>%
+  arrange(importance) %>%
+  ggplot(aes(x=reorder(variables, importance), y= importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab('Variable') +
+  labs (title = 'Random Forest Variable Importance')
+```
+
+#### Training and Test sets
+```{r}
+set.seed(123)
+library(caret)
+#Define repeated cross validation
+repeat_cv <- trainControl(method= 'repeatedcv', number = 10, repeats = 4)
+# create train and test sets of dataset
+# createDataPartition creates a stratified random sample
+trainIndex = createDataPartition(ds$Category, p = 0.70, list = FALSE)
+ds_train = ds[trainIndex,]
+ds_test = ds[-trainIndex,]
+```
+#### Model Building 
+##### Logistic regresion
+```{r}
+
+library(caret) 
+set.seed(123)  # use a set seed point for reproducibility
+
+
+#For Predicting dependent variable
+log_reg = train(
+  form = Category ~ .,
+  data = ds_train,
+  method = "glm",
+  family = "binomial"
+)
+
+#Confusion Matrix
+confusionMatrix(predict(log_reg, ds_test), as.factor(ds_test$Category))
+```
+
+```{r}
+#Odds ratios and confidence intervals
+#library(dplyr)
+#log_reg %>% 
+ # gtsummary::tbl_regression(exp = TRUE) 
+```
+```{r}
+#Variables of Importance
+library(vip)
+vip(log_reg, num_features = 10)
+```
+
+##### Random Forest with Cross Validation
+```{r}
+set.seed(123)
+#Fit the random forest model using cross validation
+rf <- train(Category ~., data = ds_train, method = 'rf',trControl = repeat_cv, metric = 'Accuracy')
+rf
+```
+```{r}
+#get confusion matrix and OOB error rate of model
+rf$finalModel
+```
+
+
+##### Random Forest with Cross Validation
+```{r}
+set.seed(123)
+#Fit the random forest model using cross validation
+rf <- train(Category ~., data = ds_train, method = 'rf',trControl = repeat_cv, metric = 'Accuracy')
+rf
+```
+```{r}
+#get confusion matrix and OOB error rate of model
+rf$finalModel
+```
+```{r}
+#Get variable importance
+var_importance <- varImp(rf, scale = FALSE)$importance
+#Turn into dataframe
+var_importance <- data.frame(variables = row.names(var_importance), importance = var_importance$Overall)
+var_importance_table <- var_importance
+names(var_importance_table)[2] <- 'HVC'
+#Create plot
+var_importance %>%
+  arrange(importance) %>%
+  ggplot(aes(x=reorder(variables, importance), y= importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab('Variable') +
+  labs (title = 'Random Forest Variable Importance')
+```
+
+```{r}
+#model on testing data
+y_hats <- predict(object = rf, newdata = ds_test[-c(1)] )
+confusionMatrix(y_hats, ds_test$Category)
+```
+```{r}
+
+```
+
+##### Random Forest without Cross Validation
+```{r}
+#Random Forest another way, not using cross validation
+set.seed(123)
+library(randomForest)
+rf <- randomForest(Category ~., data = ds_train, importance = TRUE)
+rf
+```
+1.Draw a random bootstrap sample of size n (randomly choose n examples from the training dataset with replacement).
+2.Grow a decision tree from the bootstrap sample. At each node:
+-Randomly select d features without replacement.
+-Split the node using the feature that provides the best split according to the objective function, for instance, maximizing the information gain.
+3.Repeat the steps 1-2 k times
+4.Aggregate the prediction by each tree to assign the class label by majority vote. 
+
+
+First two columns are class-specific measures computed as mean decrease in accuracy.Next is MDA over all classes. Last column is Mean Decrease in Gini index. 
+
+```{r}
+set.seed(123)
+#Hyperparameter tuning
+rf_bestmtry <- tuneRF(ds_train[-c(1)], ds_train$Category, improve = 0.015, stepFactor = 1.5, plot = TRUE)
+print(rf_bestmtry)
+```
+
+
+```{r}
+rf$confusion
+```
+```{r}
+importance(rf)
+```
+## Hepatitis prediction
+#### Variable selection
+```{r}
+#Reset the dataset
+ds <- ds1
+
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category == '1=Hepatitis'] <- 1
+ds$Category[ds$Category == '2=Fibrosis'] <- 2
+ds$Category[ds$Category == '3=Cirrhosis'] <- 3
+
+#Only predicting Hepatitis
+ds <- ds %>% filter(ds$Category < 2)
+ds$Category <- as.factor(ds$Category)
+```
+
+#### Training and Test sets
+```{r}
+set.seed(123)
+library(caret)
+#Define repeated cross validation
+repeat_cv <- trainControl(method= 'repeatedcv', number = 10, repeats = 4)
+# create train and test sets of dataset
+# createDataPartition creates a stratified random sample
+trainIndex = createDataPartition(ds$Category, p = 0.70, list = FALSE)
+ds_train = ds[trainIndex,]
+ds_test = ds[-trainIndex,]
+```
+#### Model Building
+##### Random Forest with Cross Validation
+```{r}
+set.seed(123)
+#Fit the random forest model using cross validation
+rf <- train(Category ~., data = ds_train, method = 'rf',trControl = repeat_cv, metric = 'Accuracy')
+rf
+```
+```{r}
+#get confusion matrix and OOB error rate of model
+rf$finalModel
+```
+###### Variable Importance
+```{r}
+#Get variable importance
+var_importance <- varImp(rf, scale = FALSE)$importance
+#Turn into dataframe
+var_importance <- data.frame(variables = row.names(var_importance), importance = var_importance$Overall)
+var_importance_table$Hepatitis <- var_importance$importance
+#Create plot
+var_importance %>%
+  arrange(importance) %>%
+  ggplot(aes(x=reorder(variables, importance), y= importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab('Variable') +
+  labs (title = 'Random Forest Variable Importance')
+```
+###### Prediction
+```{r}
+#model on testing data
+y_hats <- predict(object = rf, newdata = ds_test[-c(1)] )
+confusionMatrix(y_hats, ds_test$Category)
+```
+
+## Fibrosis prediction 
+#### Variable selection
+```{r}
+#Reset the dataset
+ds <- ds1
+
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category == '1=Hepatitis'] <- 1
+ds$Category[ds$Category == '2=Fibrosis'] <- 2
+ds$Category[ds$Category == '3=Cirrhosis'] <- 3
+
+#Only predicting Hepatitis
+ds <- ds %>% filter(ds$Category < 3, ds$Category != 1)
+ds$Category <- as.factor(ds$Category)
+```
+
+#### Training and Test sets
+```{r}
+set.seed(123)
+library(caret)
+#Define repeated cross validation
+repeat_cv <- trainControl(method= 'repeatedcv', number = 10, repeats = 4)
+# create train and test sets of dataset
+# createDataPartition creates a stratified random sample
+trainIndex = createDataPartition(ds$Category, p = 0.70, list = FALSE)
+ds_train = ds[trainIndex,]
+ds_test = ds[-trainIndex,]
+```
+#### Model Building
+##### Random Forest with Cross Validation
+```{r}
+set.seed(123)
+#Fit the random forest model using cross validation
+rf <- train(Category ~., data = ds_train, method = 'rf',trControl = repeat_cv, metric = 'Accuracy')
+rf
+```
+```{r}
+#get confusion matrix and OOB error rate of model
+rf$finalModel
+```
+###### Variable Importance
+```{r}
+#Get variable importance
+var_importance <- varImp(rf, scale = FALSE)$importance
+#Turn into dataframe
+var_importance <- data.frame(variables = row.names(var_importance), importance = var_importance$Overall)
+var_importance_table$Fibrosis <- var_importance$importance
+#Create plot
+var_importance %>%
+  arrange(importance) %>%
+  ggplot(aes(x=reorder(variables, importance), y= importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab('Variable') +
+  labs (title = 'Random Forest Variable Importance')
+```
+###### Prediction
+```{r}
+#model on testing data
+y_hats <- predict(object = rf, newdata = ds_test[-c(1)] )
+confusionMatrix(y_hats, ds_test$Category)
+```
+
+## Cirrhosis prediction
+#### Variable selection
+```{r}
+#Reset the dataset
+ds <- ds1
+
+ds$Category <- as.character(ds$Category)
+ds$Category[ds$Category == '0=Blood Donor'] <- 0
+ds$Category[ds$Category == '0s=suspect Blood Donor'] <- 0
+ds$Category[ds$Category == '1=Hepatitis'] <- 1
+ds$Category[ds$Category == '2=Fibrosis'] <- 2
+ds$Category[ds$Category == '3=Cirrhosis'] <- 3
+
+#Only predicting Hepatitis
+ds <- ds %>% filter(ds$Category != 2, ds$Category != 1)
+ds$Category <- as.factor(ds$Category)
+```
+
+#### Training and Test sets
+```{r}
+set.seed(123)
+library(caret)
+#Define repeated cross validation
+repeat_cv <- trainControl(method= 'repeatedcv', number = 10, repeats = 4)
+# create train and test sets of dataset
+# createDataPartition creates a stratified random sample
+trainIndex = createDataPartition(ds$Category, p = 0.70, list = FALSE)
+ds_train = ds[trainIndex,]
+ds_test = ds[-trainIndex,]
+```
+
+#### Model Building
+##### Random Forest with Cross Validation
+```{r}
+set.seed(123)
+#Fit the random forest model using cross validation
+rf <- train(Category ~., data = ds_train, method = 'rf',trControl = repeat_cv, metric = 'Accuracy')
+rf
+```
+```{r}
+#get confusion matrix and OOB error rate of model
+rf$finalModel
+```
+###### Variable Importance
+```{r}
+#Get variable importance
+var_importance <- varImp(rf, scale = FALSE)$importance
+#Turn into dataframe
+var_importance <- data.frame(variables = row.names(var_importance), importance = var_importance$Overall)
+var_importance_table$Cirrhosis <- var_importance$importance
+#Create plot
+var_importance %>%
+  arrange(importance) %>%
+  ggplot(aes(x=reorder(variables, importance), y= importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab('Variable') +
+  labs (title = 'Random Forest Variable Importance')
+```
+###### Prediction
+```{r}
+#model on testing data
+y_hats <- predict(object = rf, newdata = ds_test[-c(1)] )
+confusionMatrix(y_hats, ds_test$Category)
+```
+
+## Graphs
+```{r}
+library(ggplot2)
+library(reshape2)
+table1 <- melt(HVC_means, id.vars= 'Variables', variable.name = 'Condition', value.name= 'Means')
+#Variable importance comparison
+ggplot(table1, aes(x= Condition , y = Means, group = Variables, color =Variables)) +
+  geom_line(size = 1) +
+  ggtitle("Plot of blood test scores as condition of HVC worsens") +
+  scale_color_brewer(palette='Paired')
+
+```
+```{r}
+table2 <- melt(var_importance_table, id.vars= 'variables', variable.name = 'Condition', value.name= 'Importance_value')
+#Variable importance comparison
+library(hrbrthemes)
+ggplot(table2, aes(x= Condition , y = Importance_value, fill =variables)) +
+  geom_bar(position='dodge', stat='identity') +
+  theme_ipsum(grid = FALSE) +
+  theme(plot.title = element_text(size=14), axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12))
+  ggtitle('Variable Importance comparison for predicting HVC conditions using Random Forest')
+```
+```{r}
+
+write.csv(HVC_means,"C:\\Users\\jjbocek\\Documents\\DePaul\\DSC510\\means.csv", row.names = FALSE)
+```
+
+
+```{r}
+
+```
+We see a significant increase in four blood scores for GGT, AST, BIL, PROT and a decrease for ALP and Age for patients with Hepatitis. We see a significant increase in Age between patients with Hepatitis vs. Fibrosis. We also see a significant increase in ALP, BIL and a decrease in ALB, ALT, CHE, CHOL, PROT for patients with Fibrosis vs Cirrhosis (Table 1). A model using Logistic regression was constructed and resulted in a prediction of HVC with an accuracy of 96%. The most important features were GGT, ALP, BIL, and PROT.
