@@ -1,9 +1,9 @@
 ---
-title: "DSC510 Final Project Sandbox"
+title: "Health Final Project Sandbox"
 output: html_notebook
 ---
 
-# **DSC510 Final Project Sandbox**
+# **Health Final Project Sandbox**
 
 ```{r}
 #Setup working directory
